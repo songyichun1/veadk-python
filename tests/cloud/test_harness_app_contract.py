@@ -188,6 +188,21 @@ class TestHarnessConfig:
 
         assert config.mcp_toolset_id == "mcp-ts-test"
 
+    def test_mcp_toolset_relative_path_uses_public_endpoint(self):
+        metadata = SimpleNamespace(
+            path="/mcp",
+            network_configurations=[
+                SimpleNamespace(
+                    network_type="public",
+                    endpoint="https://example.apigateway-cn-beijing.volceapi.com",
+                )
+            ],
+        )
+
+        assert harness_utils._mcp_toolset_url(metadata, "mcp-ts-test") == (
+            "https://example.apigateway-cn-beijing.volceapi.com/mcp"
+        )
+
     def test_registry_overrides_remount_registry_tools(self):
         source = Path("veadk/cloud/harness_app/utils.py").read_text()
 

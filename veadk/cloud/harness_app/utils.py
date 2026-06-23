@@ -318,6 +318,39 @@ def _remove_agentkit_mcp_toolsets(agent: Agent) -> None:
     agent.tools = [tool for tool in agent.tools if not _is_agentkit_mcp_toolset(tool)]
 
 
+def _network_endpoint(metadata: Any) -> str:
+    configs = getattr(metadata, "network_configurations", None) or []
+    public = next(
+        (
+            config
+            for config in configs
+            if str(getattr(config, "network_type", "") or "").lower() == "public"
+            and getattr(config, "endpoint", None)
+        ),
+        None,
+    )
+    selected = public or next(
+        (config for config in configs if getattr(config, "endpoint", None)), None
+    )
+    return str(getattr(selected, "endpoint", "") or "").strip()
+
+
+def _mcp_toolset_url(metadata: Any, toolset_id: str) -> str:
+    path = str(getattr(metadata, "path", "") or "").strip()
+    if not path:
+        raise ToolLoadError(f"MCP Toolset '{toolset_id}' has no endpoint path.")
+    if path.startswith(("http://", "https://")):
+        return path
+
+    endpoint = _network_endpoint(metadata)
+    if not endpoint:
+        raise ToolLoadError(
+            f"MCP Toolset '{toolset_id}' has relative path '{path}' but no "
+            "network endpoint."
+        )
+    return f"{endpoint.rstrip('/')}/{path.lstrip('/')}"
+
+
 def build_agentkit_mcp_toolset(mcp_toolset_id: str) -> Any:
     """Resolve an AgentKit MCP Toolset ID and mount it as an ADK MCPToolset."""
     toolset_id = mcp_toolset_id.strip()
@@ -336,9 +369,7 @@ def build_agentkit_mcp_toolset(mcp_toolset_id: str) -> Any:
         GetMCPToolsetRequest(mcp_toolset_id=toolset_id)
     )
     metadata = response.mcp_toolset
-    url = str(getattr(metadata, "path", "") or "").strip()
-    if not url:
-        raise ToolLoadError(f"MCP Toolset '{toolset_id}' has no endpoint path.")
+    url = _mcp_toolset_url(metadata, toolset_id)
 
     url, headers = _key_auth_connection(
         url, getattr(metadata, "authorizer_configuration", None)
