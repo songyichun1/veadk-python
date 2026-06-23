@@ -48,6 +48,7 @@ from veadk.utils.logger import get_logger
 logger = get_logger(__name__)
 
 _REGISTRY_CONFIG_ATTR = "_veadk_a2a_registry_config"
+_MCP_TOOLSET_ID_ATTR = "_veadk_mcp_toolset_id"
 _REGISTRY_TOOL_NAMES = {
     "a2a_registry_search_agent_cards",
     "a2a_registry_task_create",
@@ -422,6 +423,23 @@ def _apply_registry_overrides(
     setattr(agent, _REGISTRY_CONFIG_ATTR, overridden_config)
 
 
+def _apply_mcp_toolset_override(agent: Agent, overrides: HarnessOverrides) -> None:
+    """Record a per-invocation AgentKit MCP Toolset binding on the clone.
+
+    Runtime-level MCP Toolset binding is applied by AgentKit when the harness is
+    deployed. The invoke path is request scoped, so the spawned clone carries the
+    selected Toolset ID without mutating the long-lived base agent.
+    """
+    if "mcp_toolset_id" not in overrides.model_fields_set:
+        return
+
+    value = overrides.mcp_toolset_id.strip()
+    if value:
+        setattr(agent, _MCP_TOOLSET_ID_ATTR, value)
+    elif hasattr(agent, _MCP_TOOLSET_ID_ATTR):
+        delattr(agent, _MCP_TOOLSET_ID_ATTR)
+
+
 def spawn_harness_agent(
     base_agent: Agent, overrides: HarnessOverrides, download_dir: Path | None = None
 ) -> Agent:
@@ -432,7 +450,8 @@ def spawn_harness_agent(
     overridable. Only the fields the request actually set are applied: ``model_name``,
     ``system_prompt`` and ``runtime`` replace the base value, while ``tools`` and
     ``skills`` are mounted *incrementally* — anything already on the agent (same
-    tool name / skill name) is skipped, so only the delta is added.
+    tool name / skill name) is skipped, so only the delta is added. ``mcp_toolset_id``
+    is kept on the spawned clone as a request-scoped AgentKit MCP Toolset binding.
 
     ``download_dir`` is where any incremental skills are downloaded; the caller
     owns it and should remove it once the invocation finishes.
@@ -460,5 +479,6 @@ def spawn_harness_agent(
         getattr(base_agent, _REGISTRY_CONFIG_ATTR, None),
         overrides,
     )
+    _apply_mcp_toolset_override(cloned, overrides)
 
     return cloned

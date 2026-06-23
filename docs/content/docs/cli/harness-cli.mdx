@@ -117,7 +117,7 @@ veadk harness show --path my-harness
 该命令打印两段：
 
 1. **已配置的智能体参数** —— `harness.yaml` 的内容（`harness_name`、`model`、`tools`、`skills`、`system_prompt`、`runtime`，以及已配置的 `knowledgebase` / `long_term_memory` / `short_term_memory`）。
-2. **可在调用时覆盖的参数** —— 由 `HarnessOverrides` 派生的每个 `--<flag>`（`--model-name`、`--tools`、`--skills`、`--system-prompt`、`--runtime`）及其说明。记忆与知识库**不可**覆盖。
+2. **可在调用时覆盖的参数** —— 由 `HarnessOverrides` 派生的每个 `--<flag>`（`--model-name`、`--tools`、`--skills`、`--system-prompt`、`--runtime`）及其说明。记忆与知识库**不可**覆盖。AgentKit 的 harness invoke API 还接受一次性的 `mcp_toolset_id`，用于请求级 MCP Toolset 覆写；该字段不写回 `harness.yaml`。
 
 | 选项 | 说明 |
 | :-- | :-- |

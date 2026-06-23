@@ -363,11 +363,12 @@ def _override_options(func):
     Shared by ``add`` and ``invoke`` so their model / tools / skills /
     system-prompt / runtime flags stay identical and in sync with the model.
     ``registry_*`` overrides are accepted by the HTTP API for AgentKit, but are
-    intentionally hidden from the VeADK CLI. Each exposed flag defaults to
-    ``None`` (unset → not applied).
+    intentionally hidden from the VeADK CLI. ``mcp_toolset_id`` has an explicit
+    deploy-time ``add`` option and is also hidden here to avoid duplicate flags.
+    Each exposed flag defaults to ``None`` (unset → not applied).
     """
     for name, field in reversed(list(HarnessOverrides.model_fields.items())):
-        if name.startswith("registry_"):
+        if name.startswith("registry_") or name == "mcp_toolset_id":
             continue
         option: dict = {
             "default": None,
@@ -553,7 +554,8 @@ def show(path: str) -> None:
     click.echo("")
     click.echo(
         "Override per call via `veadk harness invoke ... --<flag>`. "
-        "Memory, knowledgebase, and registry are not exposed as VeADK CLI overrides."
+        "Memory, knowledgebase, registry, and MCP Toolset are not exposed as "
+        "VeADK CLI overrides."
     )
 
 

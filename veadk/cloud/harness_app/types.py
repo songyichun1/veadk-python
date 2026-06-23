@@ -17,7 +17,7 @@
 The parameters split into two groups:
 
 * :class:`HarnessOverrides` — the subset that may be overridden per invocation
-  (model, prompt, tools, skills, runtime).
+  (model, prompt, tools, skills, runtime, MCP Toolset binding).
 * :class:`HarnessConfig` — the full set fixed at agent creation time. It extends
   the overridable params with the knowledge base and memory components, which are
   bound when the agent is built and therefore **cannot** be overridden per request.
@@ -67,6 +67,9 @@ class HarnessOverrides(BaseModel):
     )
     registry_top_k: int = Field(
         default=3, description="Override the number of A2A AgentCards to retrieve."
+    )
+    mcp_toolset_id: str = Field(
+        default="", description="Override the AgentKit MCP Toolset binding."
     )
 
 

@@ -117,7 +117,7 @@ veadk harness show --path my-harness
 It prints two sections:
 
 1. **Configured agent params** — the contents of `harness.yaml` (`harness_name`, `model`, `tools`, `skills`, `system_prompt`, `runtime`, and any configured `knowledgebase` / `long_term_memory` / `short_term_memory`).
-2. **Overridable at invoke time** — each `--<flag>` derived from `HarnessOverrides` (`--model-name`, `--tools`, `--skills`, `--system-prompt`, `--runtime`) and its description. Memory and the knowledge base are **not** overridable.
+2. **Overridable at invoke time** — each `--<flag>` derived from `HarnessOverrides` (`--model-name`, `--tools`, `--skills`, `--system-prompt`, `--runtime`) and its description. Memory and the knowledge base are **not** overridable. AgentKit's harness invoke API also accepts a one-time `mcp_toolset_id` for request-scoped MCP Toolset overrides; it is not written back to `harness.yaml`.
 
 | Option | Description |
 | :-- | :-- |

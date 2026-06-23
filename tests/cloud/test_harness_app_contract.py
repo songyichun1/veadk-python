@@ -34,7 +34,7 @@ from veadk.cloud.harness_app.types import (
     RunAgentRequest,
 )
 from veadk.cloud.harness_app.env_mapping import to_runtime_env
-from veadk.cloud.harness_app.utils import config_from_env, split_csv
+from veadk.cloud.harness_app.utils import config_from_env, spawn_harness_agent, split_csv
 from veadk.consts import DEFAULT_MODEL_AGENT_NAME
 from veadk.prompts.agent_default_prompt import DEFAULT_INSTRUCTION
 
@@ -56,6 +56,7 @@ class TestHarnessOverrides:
             "registry_endpoint",
             "registry_region",
             "registry_top_k",
+            "mcp_toolset_id",
         }
 
     def test_defaults(self):
@@ -69,6 +70,7 @@ class TestHarnessOverrides:
         assert fields["registry_endpoint"].default == ""
         assert fields["registry_region"].default == ""
         assert fields["registry_top_k"].default == 3
+        assert fields["mcp_toolset_id"].default == ""
 
     def test_tools_and_skills_are_csv_strings(self):
         # The server splits these with split_csv(); they must stay plain strings,
@@ -183,6 +185,23 @@ class TestHarnessConfig:
         assert "_apply_registry_overrides(" in source
         assert "_remove_a2a_registry_tools(" in source
         assert "build_a2a_registry_tools(overridden_config)" in source
+
+    def test_mcp_toolset_override_is_request_scoped(self):
+        class FakeAgent:
+            tools = []
+
+            def clone(self, update=None):
+                cloned = FakeAgent()
+                cloned.tools = list(self.tools)
+                return cloned
+
+        base = FakeAgent()
+        cloned = spawn_harness_agent(
+            base, HarnessOverrides(mcp_toolset_id="mcp-ts-test")
+        )
+
+        assert getattr(cloned, "_veadk_mcp_toolset_id") == "mcp-ts-test"
+        assert not hasattr(base, "_veadk_mcp_toolset_id")
 
 
 class TestRequestResponseSchemas:
