@@ -85,8 +85,8 @@ def build_a2a_registry_tools(
         final response. This tool calls A2A `tasks/get` once with the same
         `agent_name` and `task_id`. If `is_terminal` is false, do not create a
         new task; call this tool again with the same `task_id` until the task
-        reaches a terminal state. When the task is terminal, return the A2A
-        task's query result to the user.
+        reaches a terminal state such as `completed` or `rejected`. When the
+        task is terminal, return the A2A task's query result to the user.
         """
 
         try:
