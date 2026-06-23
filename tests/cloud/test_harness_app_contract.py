@@ -147,11 +147,13 @@ class TestHarnessConfig:
             {
                 "structured_tool_calls": True,
                 "include_tools_every_turn": True,
+                "mcp_toolset_id": "mcp-ts-test",
             }
         )
 
         assert envs["STRUCTURED_TOOL_CALLS"] == "true"
         assert envs["INCLUDE_TOOLS_EVERY_TURN"] == "true"
+        assert "MCP_TOOLSET_ID" not in envs
 
     def test_config_from_env_reads_registry_fields(self, monkeypatch):
         monkeypatch.setenv("REGISTRY_TYPE", "agentkit_a2a")

@@ -17,7 +17,7 @@ from pathlib import Path
 import yaml
 from click.testing import CliRunner
 
-from veadk.cli.cli_harness import harness
+from veadk.cli.cli_harness import _build_agentkit_config, harness
 
 
 def test_harness_add_no_longer_exposes_registry_flags():
@@ -73,6 +73,41 @@ def test_harness_add_tool_calling_flags_write_top_level_config():
         data = yaml.safe_load((Path("harness-app") / "harness.yaml").read_text())
         assert data["structured_tool_calls"] is True
         assert data["include_tools_every_turn"] is True
+
+
+def test_harness_add_mcp_toolset_id_writes_top_level_binding_field():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        runner.invoke(harness, ["create", "harness-app"])
+
+        result = runner.invoke(
+            harness,
+            [
+                "add",
+                "--path",
+                "harness-app",
+                "--mcp-toolset-id",
+                "mcp-ts-test",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        data = yaml.safe_load((Path("harness-app") / "harness.yaml").read_text())
+        assert data["mcp_toolset_id"] == "mcp-ts-test"
+
+
+def test_mcp_toolset_id_maps_to_runtime_binding_not_env():
+    cfg = _build_agentkit_config(
+        "h",
+        "cn-beijing",
+        {"HARNESS_NAME": "h"},
+        mcp_toolset_id="mcp-ts-test",
+    )
+
+    assert cfg["common"]["runtime_envs"] == {"HARNESS_NAME": "h"}
+    assert cfg["launch_types"]["cloud"]["runtime_bindings"] == {
+        "mcp_toolset_id": "mcp-ts-test"
+    }
 
 
 def test_harness_add_removes_old_responses_config_names():

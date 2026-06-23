@@ -89,6 +89,10 @@ system_prompt: ""
 #   env: RUNTIME               flag: --runtime
 runtime: adk
 
+# AgentKit MCP Toolset binding. Deploy-only; not injected as a container env.
+#   runtime binding: mcp_toolset_id   flag: --mcp-toolset-id
+mcp_toolset_id: ""
+
 # Structured tool calls via Ark Responses API.
 #   env: STRUCTURED_TOOL_CALLS       flag: --structured-tool-calls
 #   env: INCLUDE_TOOLS_EVERY_TURN    flag: --include-tools-every-turn
@@ -415,6 +419,11 @@ def _override_options(func):
     default=None,
     help="Include tool definitions on every model turn.",
 )
+@click.option(
+    "--mcp-toolset-id",
+    default=None,
+    help="Bind the deployed harness Runtime to an MCP Toolset ID.",
+)
 @_connection_options
 @click.option(
     "--path",
@@ -429,6 +438,7 @@ def add(
     max_llm_calls: int | None,
     structured_tool_calls: bool | None,
     include_tools_every_turn: bool | None,
+    mcp_toolset_id: str | None,
     path: str,
     model_name: str | None,
     tools: str | None,
@@ -457,6 +467,8 @@ def add(
         data["structured_tool_calls"] = structured_tool_calls
     if include_tools_every_turn is not None:
         data["include_tools_every_turn"] = include_tools_every_turn
+    if mcp_toolset_id is not None:
+        data["mcp_toolset_id"] = mcp_toolset_id
     if model_name is not None:
         model = data.get("model")
         if not isinstance(model, dict):
@@ -546,7 +558,11 @@ def show(path: str) -> None:
 
 
 def _build_agentkit_config(
-    runtime_name: str, region: str, envs: dict[str, str], auth: dict | None = None
+    runtime_name: str,
+    region: str,
+    envs: dict[str, str],
+    auth: dict | None = None,
+    mcp_toolset_id: str | None = None,
 ) -> dict:
     """Build the cloud AgentKit launch config dict (auto-provision).
 
@@ -583,6 +599,8 @@ def _build_agentkit_config(
         cloud["runtime_apikey_name"] = "Auto"
         cloud["runtime_apikey"] = "Auto"
         cloud["runtime_jwt_allowed_clients"] = []
+    if mcp_toolset_id and str(mcp_toolset_id).strip():
+        cloud["runtime_bindings"] = {"mcp_toolset_id": str(mcp_toolset_id).strip()}
     return {
         "common": {
             "agent_name": runtime_name,
@@ -743,6 +761,7 @@ def deploy(
     runtime_envs = to_runtime_env(data)
     runtime_name = data.get("harness_name") or _DEFAULT_HARNESS_NAME
     auth = _resolve_auth(data.get("auth"), discovery_url, allowed_id)
+    mcp_toolset_id = data.get("mcp_toolset_id")
 
     # AgentKit authenticates via the Volcengine SDK, which reads VOLC_ACCESSKEY /
     # VOLC_SECRETKEY from the environment. Mirror whatever AK/SK was passed (or
@@ -760,7 +779,15 @@ def deploy(
         )
 
     resolved_region = region or os.getenv("VOLCENGINE_REGION") or "cn-beijing"
-    cfg = _build_agentkit_config(runtime_name, resolved_region, runtime_envs, auth)
+    cfg = _build_agentkit_config(
+        runtime_name,
+        resolved_region,
+        runtime_envs,
+        auth,
+        mcp_toolset_id=str(mcp_toolset_id).strip()
+        if mcp_toolset_id is not None
+        else None,
+    )
 
     # AgentKit's launch path exposes no hook for runtime tags, so tag the runtime
     # at creation by wrapping the SDK's create_runtime: every harness runtime is

@@ -49,6 +49,7 @@ tools: []                 # -> TOOLS (comma-joined)
 skills: []                # -> SKILLS (comma-joined)
 system_prompt: ""         # -> SYSTEM_PROMPT (empty = VeADK default)
 runtime: adk              # -> RUNTIME ("adk" or "codex")
+mcp_toolset_id: ""        # Runtime binding (not an env var); applied on next deploy
 knowledgebase:
   type: ""                # -> KNOWLEDGEBASE_TYPE (empty = not created)
 long_term_memory:
@@ -81,6 +82,7 @@ veadk harness add \
 | `--skills` | Comma-separated skill hub names (sets `skills`). |
 | `--system-prompt` | System prompt / instruction. |
 | `--runtime` | Agent runtime, `adk` (default) or `codex`. |
+| `--mcp-toolset-id` | Bind an AgentKit MCP Toolset; applied as a Runtime resource binding on deploy. |
 | `--knowledgebase-type` | Knowledge base backend (sets `knowledgebase.type`). |
 | `--long-term-memory-type` | Long-term memory backend (sets `long_term_memory.type`). |
 | `--short-term-memory-type` | Short-term memory backend (sets `short_term_memory.type`). |
