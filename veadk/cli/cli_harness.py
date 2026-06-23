@@ -89,8 +89,8 @@ system_prompt: ""
 #   env: RUNTIME               flag: --runtime
 runtime: adk
 
-# AgentKit MCP Toolset binding. Deploy-only; not injected as a container env.
-#   runtime binding: mcp_toolset_id   flag: --mcp-toolset-id
+# AgentKit MCP Toolset binding.
+#   env: MCP_TOOLSET_ID   runtime binding: mcp_toolset_id   flag: --mcp-toolset-id
 mcp_toolset_id: ""
 
 # Structured tool calls via Ark Responses API.

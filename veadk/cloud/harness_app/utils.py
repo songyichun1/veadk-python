@@ -66,6 +66,7 @@ __all__ = [
     "HarnessOverrides",
     "split_csv",
     "build_skill_toolset",
+    "build_agentkit_mcp_toolset",
     "SkillLoadError",
     "ToolLoadError",
     "config_from_env",
@@ -125,6 +126,7 @@ _ENV_FIELDS = {
     "registry_top_k": "REGISTRY_TOP_K",
     "registry_timeout_ms": "REGISTRY_TIMEOUT_MS",
     "registry_poll_interval_ms": "REGISTRY_POLL_INTERVAL_MS",
+    "mcp_toolset_id": "MCP_TOOLSET_ID",
 }
 
 
@@ -245,6 +247,113 @@ def config_from_env() -> HarnessConfig:
     return HarnessConfig(**kwargs)
 
 
+def _agentkit_mcp_region() -> str:
+    return (
+        os.getenv("AGENTKIT_REGION")
+        or os.getenv("VOLCENGINE_AGENTKIT_REGION")
+        or os.getenv("VOLCENGINE_REGION")
+        or ""
+    )
+
+
+def _append_query_param(url: str, name: str, value: str) -> str:
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k != name]
+    query.append((name, value))
+    return urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(query),
+            parts.fragment,
+        )
+    )
+
+
+def _key_auth_connection(url: str, authorizer_configuration: Any) -> tuple[str, dict]:
+    authorizer = getattr(authorizer_configuration, "authorizer", None)
+    key_auth = getattr(authorizer, "key_auth", None)
+    if key_auth is None:
+        return url, {}
+
+    api_keys = getattr(key_auth, "api_keys", None) or []
+    api_key = next(
+        (
+            getattr(item, "key", None)
+            for item in api_keys
+            if getattr(item, "key", None)
+        ),
+        None,
+    )
+    if not api_key:
+        return url, {}
+    api_key = str(api_key)
+
+    location = str(getattr(key_auth, "api_key_location", "") or "").lower()
+    if "query" in location:
+        query_name = str(getattr(key_auth, "parameter", "") or "api_key")
+        return _append_query_param(url, query_name, api_key), {}
+
+    header_name = str(getattr(key_auth, "parameter", "") or "Authorization")
+    if header_name.lower() == "authorization" and not api_key.lower().startswith(
+        ("bearer ", "basic ")
+    ):
+        return url, {header_name: f"Bearer {api_key}"}
+    return url, {header_name: api_key}
+
+
+def _mark_agentkit_mcp_toolset(toolset: Any, mcp_toolset_id: str) -> Any:
+    object.__setattr__(toolset, _MCP_TOOLSET_ID_ATTR, mcp_toolset_id)
+    return toolset
+
+
+def _is_agentkit_mcp_toolset(tool: Any) -> bool:
+    return bool(getattr(tool, _MCP_TOOLSET_ID_ATTR, ""))
+
+
+def _remove_agentkit_mcp_toolsets(agent: Agent) -> None:
+    agent.tools = [tool for tool in agent.tools if not _is_agentkit_mcp_toolset(tool)]
+
+
+def build_agentkit_mcp_toolset(mcp_toolset_id: str) -> Any:
+    """Resolve an AgentKit MCP Toolset ID and mount it as an ADK MCPToolset."""
+    toolset_id = mcp_toolset_id.strip()
+    if not toolset_id:
+        raise ToolLoadError("MCP Toolset ID is empty.")
+
+    from agentkit.sdk.mcp.client import AgentkitMCPClient
+    from agentkit.sdk.mcp.types import GetMCPToolsetRequest
+    from google.adk.tools.mcp_tool.mcp_session_manager import (
+        StreamableHTTPConnectionParams,
+    )
+    from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
+
+    logger.info(f"Resolving AgentKit MCP Toolset: id={toolset_id}")
+    response = AgentkitMCPClient(region=_agentkit_mcp_region()).get_mcp_toolset(
+        GetMCPToolsetRequest(mcp_toolset_id=toolset_id)
+    )
+    metadata = response.mcp_toolset
+    url = str(getattr(metadata, "path", "") or "").strip()
+    if not url:
+        raise ToolLoadError(f"MCP Toolset '{toolset_id}' has no endpoint path.")
+
+    url, headers = _key_auth_connection(
+        url, getattr(metadata, "authorizer_configuration", None)
+    )
+    params: dict[str, Any] = {"url": url}
+    if headers:
+        params["headers"] = headers
+
+    toolset = MCPToolset(
+        connection_params=StreamableHTTPConnectionParams(**params),
+    )
+    logger.info(f"Mounted AgentKit MCP Toolset: id={toolset_id}")
+    return _mark_agentkit_mcp_toolset(toolset, toolset_id)
+
+
 def _assemble_agent(config: HarnessConfig) -> tuple[Agent, ShortTermMemory]:
     """Build an agent and its short-term memory from a :class:`HarnessConfig`.
 
@@ -281,6 +390,10 @@ def _assemble_agent(config: HarnessConfig) -> tuple[Agent, ShortTermMemory]:
             poll_interval_ms=config.registry_poll_interval_ms,
         )
         tools.extend(build_a2a_registry_tools(registry_config))
+
+    mcp_toolset_id = config.mcp_toolset_id.strip()
+    if mcp_toolset_id:
+        tools.append(build_agentkit_mcp_toolset(mcp_toolset_id))
 
     knowledgebase = None
     if config.knowledgebase_type:
@@ -325,6 +438,8 @@ def _assemble_agent(config: HarnessConfig) -> tuple[Agent, ShortTermMemory]:
     )
     if registry_config is not None:
         setattr(agent, _REGISTRY_CONFIG_ATTR, registry_config)
+    if mcp_toolset_id:
+        setattr(agent, _MCP_TOOLSET_ID_ATTR, mcp_toolset_id)
     return agent, short_term_memory
 
 
@@ -424,17 +539,14 @@ def _apply_registry_overrides(
 
 
 def _apply_mcp_toolset_override(agent: Agent, overrides: HarnessOverrides) -> None:
-    """Record a per-invocation AgentKit MCP Toolset binding on the clone.
-
-    Runtime-level MCP Toolset binding is applied by AgentKit when the harness is
-    deployed. The invoke path is request scoped, so the spawned clone carries the
-    selected Toolset ID without mutating the long-lived base agent.
-    """
+    """Apply a per-invocation AgentKit MCP Toolset binding on the clone."""
     if "mcp_toolset_id" not in overrides.model_fields_set:
         return
 
+    _remove_agentkit_mcp_toolsets(agent)
     value = overrides.mcp_toolset_id.strip()
     if value:
+        agent.tools.append(build_agentkit_mcp_toolset(value))
         setattr(agent, _MCP_TOOLSET_ID_ATTR, value)
     elif hasattr(agent, _MCP_TOOLSET_ID_ATTR):
         delattr(agent, _MCP_TOOLSET_ID_ATTR)
@@ -451,7 +563,7 @@ def spawn_harness_agent(
     ``system_prompt`` and ``runtime`` replace the base value, while ``tools`` and
     ``skills`` are mounted *incrementally* — anything already on the agent (same
     tool name / skill name) is skipped, so only the delta is added. ``mcp_toolset_id``
-    is kept on the spawned clone as a request-scoped AgentKit MCP Toolset binding.
+    remounts the request-scoped AgentKit MCP Toolset on the spawned clone.
 
     ``download_dir`` is where any incremental skills are downloaded; the caller
     owns it and should remove it once the invocation finishes.

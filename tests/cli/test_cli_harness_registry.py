@@ -96,7 +96,7 @@ def test_harness_add_mcp_toolset_id_writes_top_level_binding_field():
         assert data["mcp_toolset_id"] == "mcp-ts-test"
 
 
-def test_mcp_toolset_id_maps_to_runtime_binding_not_env():
+def test_mcp_toolset_id_maps_to_runtime_binding():
     cfg = _build_agentkit_config(
         "h",
         "cn-beijing",

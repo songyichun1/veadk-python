@@ -49,7 +49,7 @@ tools: []                 # -> TOOLS（逗号连接）
 skills: []                # -> SKILLS（逗号连接）
 system_prompt: ""         # -> SYSTEM_PROMPT（空 = VeADK 默认）
 runtime: adk              # -> RUNTIME（"adk" 或 "codex"）
-mcp_toolset_id: ""        # Runtime 关联资源（非环境变量）；下次 deploy 生效
+mcp_toolset_id: ""        # -> MCP_TOOLSET_ID + Runtime 关联资源；下次 deploy 生效
 knowledgebase:
   type: ""                # -> KNOWLEDGEBASE_TYPE（空 = 不创建）
 long_term_memory:
@@ -82,7 +82,7 @@ veadk harness add \
 | `--skills` | 逗号分隔的技能 hub 名（设置 `skills`）。 |
 | `--system-prompt` | 系统提示词 / 指令。 |
 | `--runtime` | 智能体 runtime，`adk`（默认）或 `codex`。 |
-| `--mcp-toolset-id` | 绑定 AgentKit MCP Toolset，部署时作为 Runtime 关联资源生效。 |
+| `--mcp-toolset-id` | 绑定 AgentKit MCP Toolset，部署时注入 `MCP_TOOLSET_ID` 并作为 Runtime 关联资源生效。 |
 | `--knowledgebase-type` | 知识库后端（设置 `knowledgebase.type`）。 |
 | `--long-term-memory-type` | 长期记忆后端（设置 `long_term_memory.type`）。 |
 | `--short-term-memory-type` | 短期记忆后端（设置 `short_term_memory.type`）。 |

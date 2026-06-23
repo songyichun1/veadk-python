@@ -25,7 +25,9 @@ import time, so it is intentionally left out to keep these tests offline.
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 
+from veadk.cloud.harness_app import utils as harness_utils
 from veadk.cloud.harness_app.types import (
     HarnessConfig,
     HarnessOverrides,
@@ -155,7 +157,7 @@ class TestHarnessConfig:
 
         assert envs["STRUCTURED_TOOL_CALLS"] == "true"
         assert envs["INCLUDE_TOOLS_EVERY_TURN"] == "true"
-        assert "MCP_TOOLSET_ID" not in envs
+        assert envs["MCP_TOOLSET_ID"] == "mcp-ts-test"
 
     def test_config_from_env_reads_registry_fields(self, monkeypatch):
         monkeypatch.setenv("REGISTRY_TYPE", "agentkit_a2a")
@@ -179,6 +181,13 @@ class TestHarnessConfig:
         assert config.structured_tool_calls is True
         assert config.include_tools_every_turn is False
 
+    def test_config_from_env_reads_mcp_toolset_id(self, monkeypatch):
+        monkeypatch.setenv("MCP_TOOLSET_ID", "mcp-ts-test")
+
+        config = config_from_env()
+
+        assert config.mcp_toolset_id == "mcp-ts-test"
+
     def test_registry_overrides_remount_registry_tools(self):
         source = Path("veadk/cloud/harness_app/utils.py").read_text()
 
@@ -186,21 +195,56 @@ class TestHarnessConfig:
         assert "_remove_a2a_registry_tools(" in source
         assert "build_a2a_registry_tools(overridden_config)" in source
 
-    def test_mcp_toolset_override_is_request_scoped(self):
+    def test_assemble_agent_mounts_mcp_toolset_from_config(self, monkeypatch):
+        fake_toolset = SimpleNamespace()
+        captured = {}
+
         class FakeAgent:
-            tools = []
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+                self.tools = kwargs["tools"]
+
+        monkeypatch.setattr(harness_utils, "Agent", FakeAgent)
+        monkeypatch.setattr(harness_utils, "ShortTermMemory", lambda backend: "memory")
+        monkeypatch.setattr(
+            harness_utils,
+            "build_agentkit_mcp_toolset",
+            lambda toolset_id: fake_toolset,
+        )
+
+        agent, memory = harness_utils._assemble_agent(
+            HarnessConfig(mcp_toolset_id="mcp-ts-test")
+        )
+
+        assert fake_toolset in captured["tools"]
+        assert getattr(agent, "_veadk_mcp_toolset_id") == "mcp-ts-test"
+        assert memory == "memory"
+
+    def test_mcp_toolset_override_is_request_scoped(self, monkeypatch):
+        class FakeAgent:
+            def __init__(self, tools=None):
+                self.tools = list(tools or [])
 
             def clone(self, update=None):
-                cloned = FakeAgent()
-                cloned.tools = list(self.tools)
-                return cloned
+                return FakeAgent(self.tools)
 
-        base = FakeAgent()
+        old_toolset = SimpleNamespace()
+        setattr(old_toolset, "_veadk_mcp_toolset_id", "mcp-ts-old")
+        new_toolset = SimpleNamespace()
+        monkeypatch.setattr(
+            harness_utils,
+            "build_agentkit_mcp_toolset",
+            lambda toolset_id: new_toolset,
+        )
+
+        base = FakeAgent([old_toolset])
         cloned = spawn_harness_agent(
             base, HarnessOverrides(mcp_toolset_id="mcp-ts-test")
         )
 
         assert getattr(cloned, "_veadk_mcp_toolset_id") == "mcp-ts-test"
+        assert cloned.tools == [new_toolset]
+        assert base.tools == [old_toolset]
         assert not hasattr(base, "_veadk_mcp_toolset_id")
 
 

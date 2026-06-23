@@ -56,7 +56,7 @@ COMPONENT_TYPE_ENV: dict[str, str] = {
     "short_term_memory": "SHORT_TERM_MEMORY_TYPE",
 }
 
-DEPLOY_ONLY_FIELDS = frozenset({"auth", "mcp_toolset_id"})
+DEPLOY_ONLY_FIELDS = frozenset({"auth"})
 
 # Backend ``type`` -> {harness connection param: VeADK env var}. Mirrors the
 # pydantic-settings env prefixes in :mod:`veadk.configs.database_configs`;
