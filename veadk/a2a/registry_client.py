@@ -22,6 +22,9 @@ import os
 import re
 import time
 import uuid
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -30,6 +33,7 @@ from urllib.parse import quote, urlparse, urlunparse
 import requests
 
 from veadk.auth.veauth.utils import get_credential_from_vefaas_iam
+from veadk.utils.auth import VE_TIP_TOKEN_HEADER
 
 DEFAULT_ENDPOINT = "http://volcengineapi.byted.org/"
 DEFAULT_VERSION = "2025-10-30"
@@ -42,6 +46,10 @@ DEFAULT_POLL_INTERVAL_MS = 5000
 SEARCH_PROMPT_MAX_BYTES = 2048
 TERMINAL_STATES = {"completed", "failed", "canceled", "rejected"}
 _OAUTH_TOKEN_CACHE: dict[str, tuple[str, float]] = {}
+_CURRENT_UPSTREAM_TIP_TOKEN: ContextVar[str] = ContextVar(
+    "veadk_a2a_registry_upstream_tip_token",
+    default="",
+)
 
 
 class RegistryError(Exception):
@@ -66,6 +74,7 @@ class AgentKitA2ARegistryConfig:
     top_k: int = DEFAULT_TOP_K
     timeout_ms: int = DEFAULT_TIMEOUT_MS
     poll_interval_ms: int = DEFAULT_POLL_INTERVAL_MS
+    upstream_tip_token: str = ""
 
 
 @dataclass(frozen=True)
@@ -97,7 +106,40 @@ def registry_config_from_env() -> AgentKitA2ARegistryConfig:
         poll_interval_ms=_int_env(
             "REGISTRY_POLL_INTERVAL_MS", DEFAULT_POLL_INTERVAL_MS, minimum=100
         ),
+        upstream_tip_token=_first_env(
+            [
+                "REGISTRY_UPSTREAM_TIP_TOKEN",
+                "AGENTKIT_UPSTREAM_TIP_TOKEN",
+                "A2A_REGISTRY_UPSTREAM_TIP_TOKEN",
+                "VE_TIP_TOKEN",
+                "X_VE_TIP_TOKEN",
+                "TIP_TOKEN",
+            ]
+        ),
     )
+
+
+def registry_tip_token_from_headers(headers: Mapping[str, str]) -> str:
+    """Extract an inbound TIP token from HTTP headers."""
+
+    normalized = {str(key).lower(): str(value) for key, value in headers.items()}
+    return normalized.get(VE_TIP_TOKEN_HEADER.lower(), "").strip()
+
+
+@contextmanager
+def use_registry_tip_token(tip_token: str | None) -> Iterator[None]:
+    """Set the upstream TIP token for registry-triggered remote A2A calls."""
+
+    cleaned = (tip_token or "").strip()
+    if not cleaned:
+        yield
+        return
+
+    token = _CURRENT_UPSTREAM_TIP_TOKEN.set(cleaned)
+    try:
+        yield
+    finally:
+        _CURRENT_UPSTREAM_TIP_TOKEN.reset(token)
 
 
 def search_agent_cards(
@@ -250,6 +292,9 @@ def _resolve_config(
                 or DEFAULT_POLL_INTERVAL_MS
             ),
         ),
+        upstream_tip_token=(
+            config.upstream_tip_token or env_config.upstream_tip_token
+        ).strip(),
     )
 
 
@@ -817,6 +862,7 @@ def _sanitize_get_agent_result(
 def _agent_auth_headers(
     card: dict[str, Any], config: AgentKitA2ARegistryConfig | None = None
 ) -> dict[str, str]:
+    resolved_config = _resolve_config(config)
     security = card.get("security") or []
     schemes = card.get("securitySchemes") or {}
     headers: dict[str, str] = {}
@@ -838,8 +884,12 @@ def _agent_auth_headers(
                     headers[header_name] = token
             elif scheme_type == "oauth2":
                 headers["Authorization"] = "Bearer " + _oauth2_client_credentials_token(
-                    scheme, _resolve_config(config)
+                    scheme, resolved_config
                 )
+
+    tip_token = _upstream_tip_token(resolved_config)
+    if tip_token:
+        headers[VE_TIP_TOKEN_HEADER] = tip_token
 
     if security and not headers:
         raise RegistryError(
@@ -847,6 +897,23 @@ def _agent_auth_headers(
             "AgentCard has security config but no usable header credential",
         )
     return headers
+
+
+def _upstream_tip_token(config: AgentKitA2ARegistryConfig) -> str:
+    return (
+        _CURRENT_UPSTREAM_TIP_TOKEN.get()
+        or config.upstream_tip_token
+        or _first_env(
+            [
+                "REGISTRY_UPSTREAM_TIP_TOKEN",
+                "AGENTKIT_UPSTREAM_TIP_TOKEN",
+                "A2A_REGISTRY_UPSTREAM_TIP_TOKEN",
+                "VE_TIP_TOKEN",
+                "X_VE_TIP_TOKEN",
+                "TIP_TOKEN",
+            ]
+        )
+    ).strip()
 
 
 def _oauth2_client_credentials_token(
