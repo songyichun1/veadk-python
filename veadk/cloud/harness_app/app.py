@@ -275,6 +275,7 @@ class HarnessApp:
                                 request.prompt,
                                 request.harness,
                                 download_dir=Path(work_dir),
+                                registry_tip_token=tip_token,
                             )
                             runner = Runner(
                                 agent=agent,
@@ -289,11 +290,14 @@ class HarnessApp:
                                 run_config=run_config,
                             )
                     elif needs_scoped_runner:
-                        run_agent = (
-                            spawn_harness_run_agent(self.agent, request.prompt)
-                            if has_registry
-                            else self.agent
-                        )
+                        if has_registry:
+                            run_agent = spawn_harness_run_agent(
+                                self.agent,
+                                request.prompt,
+                                registry_tip_token=tip_token,
+                            )
+                        else:
+                            run_agent = self.agent
                         runner = Runner(
                             agent=run_agent,
                             short_term_memory=self.short_term_memory,
@@ -412,13 +416,18 @@ class HarnessApp:
                             prompt,
                             req.harness,
                             download_dir=Path(work_dir_ctx.name),
+                            registry_tip_token=tip_token,
                         )
                     except (SkillLoadError, ToolLoadError) as e:
                         logger.error(f"Once-time override failed to load: {e}")
                         yield f"data: {json.dumps({'error': str(e)})}\n\n"
                         return
                 elif has_a2a_registry_config(self.agent):
-                    agent = spawn_harness_run_agent(self.agent, prompt)
+                    agent = spawn_harness_run_agent(
+                        self.agent,
+                        prompt,
+                        registry_tip_token=tip_token,
+                    )
                 else:
                     agent = self.agent
 
