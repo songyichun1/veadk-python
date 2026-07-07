@@ -22,9 +22,7 @@ import os
 import re
 import time
 import uuid
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
-from contextvars import ContextVar
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -46,10 +44,6 @@ DEFAULT_POLL_INTERVAL_MS = 5000
 SEARCH_PROMPT_MAX_BYTES = 2048
 TERMINAL_STATES = {"completed", "failed", "canceled", "rejected"}
 _OAUTH_TOKEN_CACHE: dict[str, tuple[str, float]] = {}
-_CURRENT_UPSTREAM_TIP_TOKEN: ContextVar[str] = ContextVar(
-    "veadk_a2a_registry_upstream_tip_token",
-    default="",
-)
 
 
 class RegistryError(Exception):
@@ -124,22 +118,6 @@ def registry_tip_token_from_headers(headers: Mapping[str, str]) -> str:
 
     normalized = {str(key).lower(): str(value) for key, value in headers.items()}
     return normalized.get(VE_TIP_TOKEN_HEADER.lower(), "").strip()
-
-
-@contextmanager
-def use_registry_tip_token(tip_token: str | None) -> Iterator[None]:
-    """Set the upstream TIP token for registry-triggered remote A2A calls."""
-
-    cleaned = (tip_token or "").strip()
-    if not cleaned:
-        yield
-        return
-
-    token = _CURRENT_UPSTREAM_TIP_TOKEN.set(cleaned)
-    try:
-        yield
-    finally:
-        _CURRENT_UPSTREAM_TIP_TOKEN.reset(token)
 
 
 def search_agent_cards(
@@ -887,7 +865,7 @@ def _agent_auth_headers(
                     scheme, resolved_config
                 )
 
-    tip_token = _upstream_tip_token(resolved_config)
+    tip_token = resolved_config.upstream_tip_token
     if tip_token:
         headers[VE_TIP_TOKEN_HEADER] = tip_token
 
@@ -897,23 +875,6 @@ def _agent_auth_headers(
             "AgentCard has security config but no usable header credential",
         )
     return headers
-
-
-def _upstream_tip_token(config: AgentKitA2ARegistryConfig) -> str:
-    return (
-        _CURRENT_UPSTREAM_TIP_TOKEN.get()
-        or config.upstream_tip_token
-        or _first_env(
-            [
-                "REGISTRY_UPSTREAM_TIP_TOKEN",
-                "AGENTKIT_UPSTREAM_TIP_TOKEN",
-                "A2A_REGISTRY_UPSTREAM_TIP_TOKEN",
-                "VE_TIP_TOKEN",
-                "X_VE_TIP_TOKEN",
-                "TIP_TOKEN",
-            ]
-        )
-    ).strip()
 
 
 def _oauth2_client_credentials_token(

@@ -30,7 +30,6 @@ from veadk.a2a.registry_client import (
     registry_tip_token_from_headers,
     search_agent_cards,
     truncate_utf8_bytes,
-    use_registry_tip_token,
 )
 from veadk.tools.builtin_tools.a2a_registry import (
     build_a2a_registry_tools,
@@ -604,7 +603,7 @@ def test_build_remote_a2a_agent_tools_searches_gets_and_sends(post: Mock):
     clear=False,
 )
 @patch("veadk.a2a.registry_client.requests.post")
-def test_dynamic_remote_a2a_tool_forwards_context_tip_token(post: Mock):
+def test_dynamic_remote_a2a_tool_forwards_config_tip_token(post: Mock):
     card = _agent_card()
     post.side_effect = [
         _mock_response(
@@ -632,15 +631,17 @@ def test_dynamic_remote_a2a_tool_forwards_context_tip_token(post: Mock):
             }
         ),
     ]
-    config = AgentKitA2ARegistryConfig(space_id="space-test")
+    config = AgentKitA2ARegistryConfig(
+        space_id="space-test",
+        upstream_tip_token="tip-from-config",
+    )
 
     tools = build_remote_a2a_agent_tools("北京天气", config)
-    with use_registry_tip_token("tip-from-request"):
-        result = tools[0](input="北京天气")
+    result = tools[0](input="北京天气")
 
     assert result["outcome"] == "success"
     assert post.call_args_list[2].kwargs["headers"][VE_TIP_TOKEN_HEADER] == (
-        "tip-from-request"
+        "tip-from-config"
     )
 
 

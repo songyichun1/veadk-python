@@ -62,10 +62,7 @@ from google.adk.utils.context_utils import Aclosing
 from typing_extensions import override
 
 from veadk import Agent
-from veadk.a2a.registry_client import (
-    registry_tip_token_from_headers,
-    use_registry_tip_token,
-)
+from veadk.a2a.registry_client import registry_tip_token_from_headers
 from veadk.a2a.utils.agent_to_a2a import to_a2a
 from veadk.cloud.harness_app.agent import agent, short_term_memory
 from veadk.cloud.harness_app.harness_plugins import (
@@ -258,48 +255,26 @@ class HarnessApp:
                     or bool(header_plugins)
                     or usage_plugin is not None
                 )
-                with use_registry_tip_token(tip_token):
-                    if request.harness is not None:
-                        logger.info(
-                            f"Applying once-time harness override: {request.harness}"
+                if request.harness is not None:
+                    logger.info(
+                        f"Applying once-time harness override: {request.harness}"
+                    )
+                    # The override clones the base agent and may download incremental
+                    # skills into a temp dir; the skill files are read from disk while
+                    # the agent runs, so the dir is removed (and the one-off agent +
+                    # runner dropped) only after the run finishes.
+                    with tempfile.TemporaryDirectory(
+                        prefix="harness_invoke_"
+                    ) as work_dir:
+                        agent = spawn_harness_run_agent(
+                            self.agent,
+                            request.prompt,
+                            request.harness,
+                            download_dir=Path(work_dir),
+                            registry_tip_token=tip_token,
                         )
-                        # The override clones the base agent and may download incremental
-                        # skills into a temp dir; the skill files are read from disk while
-                        # the agent runs, so the dir is removed (and the one-off agent +
-                        # runner dropped) only after the run finishes.
-                        with tempfile.TemporaryDirectory(
-                            prefix="harness_invoke_"
-                        ) as work_dir:
-                            agent = spawn_harness_run_agent(
-                                self.agent,
-                                request.prompt,
-                                request.harness,
-                                download_dir=Path(work_dir),
-                                registry_tip_token=tip_token,
-                            )
-                            runner = Runner(
-                                agent=agent,
-                                short_term_memory=self.short_term_memory,
-                                app_name=self.harness_name,
-                                plugins=plugins,
-                            )
-                            output = await runner.run(
-                                messages=[request.prompt],
-                                user_id=request.run_agent_request.user_id,
-                                session_id=request.run_agent_request.session_id,
-                                run_config=run_config,
-                            )
-                    elif needs_scoped_runner:
-                        if has_registry:
-                            run_agent = spawn_harness_run_agent(
-                                self.agent,
-                                request.prompt,
-                                registry_tip_token=tip_token,
-                            )
-                        else:
-                            run_agent = self.agent
                         runner = Runner(
-                            agent=run_agent,
+                            agent=agent,
                             short_term_memory=self.short_term_memory,
                             app_name=self.harness_name,
                             plugins=plugins,
@@ -310,13 +285,34 @@ class HarnessApp:
                             session_id=request.run_agent_request.session_id,
                             run_config=run_config,
                         )
-                    else:
-                        output = await self.runner.run(
-                            messages=[request.prompt],
-                            user_id=request.run_agent_request.user_id,
-                            session_id=request.run_agent_request.session_id,
-                            run_config=run_config,
+                elif needs_scoped_runner:
+                    if has_registry:
+                        run_agent = spawn_harness_run_agent(
+                            self.agent,
+                            request.prompt,
+                            registry_tip_token=tip_token,
                         )
+                    else:
+                        run_agent = self.agent
+                    runner = Runner(
+                        agent=run_agent,
+                        short_term_memory=self.short_term_memory,
+                        app_name=self.harness_name,
+                        plugins=plugins,
+                    )
+                    output = await runner.run(
+                        messages=[request.prompt],
+                        user_id=request.run_agent_request.user_id,
+                        session_id=request.run_agent_request.session_id,
+                        run_config=run_config,
+                    )
+                else:
+                    output = await self.runner.run(
+                        messages=[request.prompt],
+                        user_id=request.run_agent_request.user_id,
+                        session_id=request.run_agent_request.session_id,
+                        run_config=run_config,
+                    )
             except (SkillLoadError, ToolLoadError) as e:
                 # A once-time tool/skill failed to load; return the reason to the
                 # caller instead of running with a wrong tool/skill set.
@@ -401,73 +397,72 @@ class HarnessApp:
         )
         work_dir_ctx = None
         prompt = _content_text(req.new_message)
-        with use_registry_tip_token(tip_token):
-            try:
-                if req.harness is not None:
-                    logger.info(f"run_sse once-time override: {req.harness}")
-                    # Skills may download into a temp dir read from disk during the
-                    # run, so keep it alive for the whole stream.
-                    work_dir_ctx = tempfile.TemporaryDirectory(
-                        prefix="harness_run_sse_"
-                    )
-                    try:
-                        agent = spawn_harness_run_agent(
-                            self.agent,
-                            prompt,
-                            req.harness,
-                            download_dir=Path(work_dir_ctx.name),
-                            registry_tip_token=tip_token,
-                        )
-                    except (SkillLoadError, ToolLoadError) as e:
-                        logger.error(f"Once-time override failed to load: {e}")
-                        yield f"data: {json.dumps({'error': str(e)})}\n\n"
-                        return
-                elif has_a2a_registry_config(self.agent):
+        try:
+            if req.harness is not None:
+                logger.info(f"run_sse once-time override: {req.harness}")
+                # Skills may download into a temp dir read from disk during the
+                # run, so keep it alive for the whole stream.
+                work_dir_ctx = tempfile.TemporaryDirectory(
+                    prefix="harness_run_sse_"
+                )
+                try:
                     agent = spawn_harness_run_agent(
                         self.agent,
                         prompt,
+                        req.harness,
+                        download_dir=Path(work_dir_ctx.name),
                         registry_tip_token=tip_token,
                     )
-                else:
-                    agent = self.agent
-
-                runner = Runner(
-                    agent=agent,
-                    short_term_memory=self.short_term_memory,
-                    app_name=req.app_name,
+                except (SkillLoadError, ToolLoadError) as e:
+                    logger.error(f"Once-time override failed to load: {e}")
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                    return
+            elif has_a2a_registry_config(self.agent):
+                agent = spawn_harness_run_agent(
+                    self.agent,
+                    prompt,
+                    registry_tip_token=tip_token,
                 )
-                # Be self-sufficient: create the session if the caller did not.
-                if not await runner.session_service.get_session(
+            else:
+                agent = self.agent
+
+            runner = Runner(
+                agent=agent,
+                short_term_memory=self.short_term_memory,
+                app_name=req.app_name,
+            )
+            # Be self-sufficient: create the session if the caller did not.
+            if not await runner.session_service.get_session(
+                app_name=req.app_name,
+                user_id=req.user_id,
+                session_id=req.session_id,
+            ):
+                await runner.session_service.create_session(
                     app_name=req.app_name,
                     user_id=req.user_id,
                     session_id=req.session_id,
-                ):
-                    await runner.session_service.create_session(
-                        app_name=req.app_name,
-                        user_id=req.user_id,
-                        session_id=req.session_id,
-                    )
+                )
 
-                async with Aclosing(
-                    runner.run_async(
-                        user_id=req.user_id,
-                        session_id=req.session_id,
-                        new_message=req.new_message,
-                        run_config=run_config,
+            async with Aclosing(
+                runner.run_async(
+                    user_id=req.user_id,
+                    session_id=req.session_id,
+                    new_message=req.new_message,
+                    run_config=run_config,
+                )
+            ) as agen:
+                async for event in agen:
+                    yield (
+                        "data: "
+                        + event.model_dump_json(exclude_none=True, by_alias=True)
+                        + "\n\n"
                     )
-                ) as agen:
-                    async for event in agen:
-                        yield (
-                            "data: "
-                            + event.model_dump_json(exclude_none=True, by_alias=True)
-                            + "\n\n"
-                        )
-            except Exception as e:
-                logger.exception("run_sse failed")
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
-            finally:
-                if work_dir_ctx is not None:
-                    work_dir_ctx.cleanup()
+        except Exception as e:
+            logger.exception("run_sse failed")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        finally:
+            if work_dir_ctx is not None:
+                work_dir_ctx.cleanup()
 
     def _plugins_for_run(
         self,
