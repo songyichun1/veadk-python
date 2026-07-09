@@ -388,9 +388,7 @@ class HarnessApp:
                 routes.insert(0, routes.pop(i))
                 break
 
-    async def _run_sse_events(
-        self, req: "HarnessRunAgentRequest", tip_token: str = ""
-    ):
+    async def _run_sse_events(self, req: "HarnessRunAgentRequest", tip_token: str = ""):
         """Yield SSE ``data:`` lines for a run, spawning the agent on override."""
         run_config = RunConfig(
             streaming_mode=StreamingMode.SSE if req.streaming else StreamingMode.NONE
@@ -402,9 +400,7 @@ class HarnessApp:
                 logger.info(f"run_sse once-time override: {req.harness}")
                 # Skills may download into a temp dir read from disk during the
                 # run, so keep it alive for the whole stream.
-                work_dir_ctx = tempfile.TemporaryDirectory(
-                    prefix="harness_run_sse_"
-                )
+                work_dir_ctx = tempfile.TemporaryDirectory(prefix="harness_run_sse_")
                 try:
                     agent = spawn_harness_run_agent(
                         self.agent,
