@@ -1,0 +1,60 @@
+frontend/src/create/CustomCreate.tsx
+  s_bf420195f7a1d5::t_f67c0a80d2271e 2556 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a6087c56a5210aad209aa8c","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":2556}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5f25e7536cb9d92aee6808938614e632859be476",
+  "prompts": {},
+  "sessions": {
+    "s_bf420195f7a1d5": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a60635f6a5210aad209a8ff",
+        "model": "gpt-5.5__max"
+      },
+      "human_author": "songyichun1 <songyichun.123@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {
+    "frontend/src/create/CustomCreate.tsx": [
+      {
+        "hash": "s_bf420195f7a1d5::t_f67c0a80d2271e",
+        "line_ranges": [
+          {
+            "Single": 2556
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a6087c56a5210aad209aa8c",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 2556
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "s_bf420195f7a1d5": {
+      "tool": "trae",
+      "conversation_id": "6a60635f6a5210aad209a8ff",
+      "session_id": "6a60635f6a5210aad209a8ff",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_bf420195f7a1d5::t_f67c0a80d2271e": {
+      "tool": "trae",
+      "conversation_id": "6a60635f6a5210aad209a8ff",
+      "session_id": "6a60635f6a5210aad209a8ff",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}
