@@ -230,6 +230,43 @@ function DebugRunIcon({ className }: { className?: string }) {
   );
 }
 
+function A2aSelectChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m8.75 9.5 3.25 3.25 3.25-3.25" />
+    </svg>
+  );
+}
+
+function A2aRefreshIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M18.25 8.2A7.1 7.1 0 0 0 6.1 6.65L4.5 8.25" />
+      <path d="M4.5 4.75v3.5H8" />
+      <path d="M5.75 15.8A7.1 7.1 0 0 0 17.9 17.35l1.6-1.6" />
+      <path d="M19.5 19.25v-3.5H16" />
+    </svg>
+  );
+}
+
 const AGENT_TYPE_GAP_PX = 4;
 const AGENT_TYPE_BAR_LABELS: Record<
   NonNullable<AgentDraft["agentType"]>,
@@ -510,7 +547,7 @@ function A2aSpaceSelect({
             onClick={() => setOpen((current) => !current)}
           >
             <span>{selectedLabel}</span>
-            <ChevronRight className="cw-a2a-space-trigger-icon" aria-hidden />
+            <A2aSelectChevronIcon className="cw-a2a-space-trigger-icon" />
           </button>
           {open && (
             <div
@@ -571,7 +608,7 @@ function A2aSpaceSelect({
           {loading ? (
             <Loader2 className="cw-i cw-i-sm cw-spin" />
           ) : (
-            <RefreshCw className="cw-i cw-i-sm" />
+            <A2aRefreshIcon className="cw-i cw-i-sm" />
           )}
         </button>
       </div>
