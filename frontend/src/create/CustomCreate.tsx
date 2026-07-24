@@ -237,12 +237,12 @@ function A2aSelectChevronIcon({ className }: { className?: string }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.75"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="m8.75 9.5 3.25 3.25 3.25-3.25" />
+      <path d="m7 9 5 5 5-5" />
     </svg>
   );
 }
@@ -546,7 +546,9 @@ function A2aSpaceSelect({
             aria-label="选择 AgentKit 智能体中心"
             onClick={() => setOpen((current) => !current)}
           >
-            <span>{selectedLabel}</span>
+            <span className={!value ? "is-placeholder" : undefined}>
+              {selectedLabel}
+            </span>
             <A2aSelectChevronIcon className="cw-a2a-space-trigger-icon" />
           </button>
           {open && (
@@ -555,15 +557,6 @@ function A2aSpaceSelect({
               role="listbox"
               aria-label="AgentKit 智能体中心"
             >
-              <button
-                type="button"
-                role="option"
-                aria-selected={!value}
-                className={`cw-a2a-space-option ${!value ? "is-selected" : ""}`}
-                onClick={() => selectSpace("")}
-              >
-                请选择智能体中心
-              </button>
               {value && !selectedKnown && (
                 <button
                   type="button"
@@ -1781,6 +1774,8 @@ export function CustomCreate({
   const [activeId, setActiveId] = useState<StepId>("basic");
   const [buildErr, setBuildErr] = useState("");
   const [modelAdvancedOpen, setModelAdvancedOpen] = useState(false);
+  const [a2aRegistryAdvancedOpen, setA2aRegistryAdvancedOpen] =
+    useState(false);
   const [moreToolTypesOpen, setMoreToolTypesOpen] = useState(false);
   const [advancedConfigOpen, setAdvancedConfigOpen] = useState(false);
 
@@ -1838,6 +1833,9 @@ export function CustomCreate({
   const node = getNode(draft, safePath);
   const isRootAgent = safePath.length === 0;
   const modelAdvancedId = `cw-model-advanced-${safePath.join("-") || "root"}`;
+  const a2aRegistryAdvancedId = `cw-a2a-registry-advanced-${
+    safePath.join("-") || "root"
+  }`;
   const moreToolTypesId = `cw-more-tool-types-${safePath.join("-") || "root"}`;
   const advancedConfigId = `cw-advanced-config-${safePath.join("-") || "root"}`;
   const activeTypeIndex = Math.max(
@@ -2540,13 +2538,47 @@ export function CustomCreate({
                               )
                             }
                           />
-                          <RuntimeEnvFields
-                            env={A2A_REGISTRY_RUNTIME_ENV}
-                            values={a2aRegistryEnvValues(node.a2aRegistry, {
-                              includeDefaults: false,
-                            })}
-                            onChange={patchA2aRegistryEnv}
-                          />
+                          <button
+                            type="button"
+                            className="cw-more-options"
+                            aria-expanded={a2aRegistryAdvancedOpen}
+                            aria-controls={a2aRegistryAdvancedId}
+                            onClick={() =>
+                              setA2aRegistryAdvancedOpen((open) => !open)
+                            }
+                          >
+                            <span>更多选项</span>
+                            <ChevronRight
+                              className={`cw-more-options-chevron ${
+                                a2aRegistryAdvancedOpen ? "is-open" : ""
+                              }`}
+                              aria-hidden
+                            />
+                          </button>
+                          <AnimatePresence initial={false}>
+                            {a2aRegistryAdvancedOpen && (
+                              <motion.div
+                                id={a2aRegistryAdvancedId}
+                                className="cw-model-advanced"
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{
+                                  duration: 0.18,
+                                  ease: "easeOut",
+                                }}
+                              >
+                                <RuntimeEnvFields
+                                  env={A2A_REGISTRY_RUNTIME_ENV}
+                                  values={a2aRegistryEnvValues(
+                                    node.a2aRegistry,
+                                    { includeDefaults: false },
+                                  )}
+                                  onChange={patchA2aRegistryEnv}
+                                />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                           {showErrors && a2aRegistrySpaceMissing && (
                             <span className="cw-error-text">
                               请选择 AgentKit 智能体中心
